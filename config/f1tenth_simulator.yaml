@@ -7,7 +7,6 @@ useLidar: True
 
 map:
   path: "maps/iROS23.png"
-  # path: "maps/iROS23wObstacles.png"
   origin: [-16.638911, -1.603149, 0.000000] # m
   # origin: [0, 0, 0.000000] # m
   resolution: 0.025000 # m/cell
