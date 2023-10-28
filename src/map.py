@@ -108,6 +108,10 @@ class Map:
             max_range / self.resolution,  # max range in pixels
             num_thetas,  # theta discretization
         )
+        # return range_libc.PyBresenhamsLine(
+        #     self.oMap,
+        #     max_range / self.resolution,  # max range in pixels
+        # )
 
     def update(self, dt):
         # update the obstacles
@@ -145,38 +149,8 @@ class Map:
         if self.oMap is None:
             self.oMap = range_libc.PyOMap(self.grid)
 
-    def getPixelFromXY(self, x, y):
-        # convert from meters to pixels
-        x = int((x + self.origin[0]) / self.resolution)
-        y = int((y + self.origin[1]) / self.resolution)
-
-        # check if the pixel is within the map
-        if x < 0 or x >= self.height or y < 0 or y >= self.width:
-            return 255
-
-        # return the pixel value
-        return self.map[y, x]
-
-    def getEdge(self, prev_x, prev_y, x, y):
-        # get the distance between the two points
-        dist = np.sqrt((prev_x - x) ** 2 + (prev_y - y) ** 2)
-
-        # get the number of points to check
-        num_points = int(dist / self.resolution)
-
-        # get the x,y of the points to check
-        x_list = np.linspace(prev_x, x, num_points)
-        y_list = np.linspace(prev_y, y, num_points)
-
-        # check if any of the points are in collision
-        for x, y in zip(x_list, y_list):
-            if self.getPixelFromXY(x, y) >= self.occupied_thresh:
-                return x, y
-
-        return None
-
-    def getRange(self, x, y, theta, car):
-        range = self.range_method[car]["range_method"].calc_range(x, y, theta)
+    def getRange(self, car, x, y, theta):
+        range = self.range_methods[car]["range_method"].calc_range(x, y, theta)
         return range
 
     def getRanges(self, car, x, y, thetas):
@@ -193,10 +167,7 @@ class Map:
 
 
 class Obstacle:
-    def __init__(self, O, W, H, resolution) -> None:
-        self.O = O
-        self.W = W
-        self.H = H
+    def __init__(self, pt1, pt2, pt3, pt4, resolution) -> None:
         self.resolution = resolution
 
         self.isActive = True
@@ -204,9 +175,7 @@ class Obstacle:
         self.updated = False
 
         # generate rectangle points
-        self.pts = np.array(
-            [[O[0], O[1]], [O[0] + W, O[1]], [O[0] + W, O[1] + H], [O[0], O[1] + H]]
-        )
+        self.pts = np.array([pt1, pt2, pt3, pt4])
 
         self.border = []
         self.generateBorderPoints()

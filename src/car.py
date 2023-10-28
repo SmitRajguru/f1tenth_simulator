@@ -103,7 +103,7 @@ class Car:
         )
 
     def commandCallback(self, msg):
-        print("Received command: ", msg.steering_angle, msg.speed)
+        print(f"{self.name} Command: {msg.steering_angle}, {msg.speed}")
         self.isControlled = True
 
         self.velocity = msg.speed
@@ -150,26 +150,36 @@ class Car:
         self.publishOdometry()
 
     def checkCollision(self):
-        # get the pixel value of the car
-        car_pixel = self.map.getPixelFromXY(self.x, self.y)
+        # get angle from previous point to current point
+        theta = np.arctan2(self.y - self.prev_y, self.x - self.prev_x)
+
+        # get the range from previous point to current point
+        dist = np.sqrt((self.y - self.prev_y) ** 2 + (self.x - self.prev_x) ** 2)
+        lidar = self.map.getRanges(self.name, self.prev_x, self.prev_y, [theta])
+        lidar = lidar[0]
 
         # check if the car is inside an obstacle
-        if car_pixel >= self.map.occupied_thresh:
-            # get the point of coillision from the map
-            collision_point = self.map.getEdge(self.prev_x, self.prev_y, self.x, self.y)
+        if dist >= lidar - self.map.wallBuffer:
+            # get the collision point from previous point theta and range
+            collision_point = (
+                self.prev_x + lidar * np.cos(theta),
+                self.prev_y + lidar * np.sin(theta),
+            )
 
-            # check if the collision point is None
-            if collision_point is None:
-                collision_point = (self.x, self.y)
-
-            # move towards to previous point from the collision point by wallBuffer
-            slope = np.arctan2(self.y - self.prev_y, self.x - self.prev_x)
-
-            self.x = collision_point[0] - self.map.wallBuffer * np.cos(slope)
-            self.y = collision_point[1] - self.map.wallBuffer * np.sin(slope)
+            # update the car to not move
+            self.x = collision_point[0] - self.map.wallBuffer * np.cos(theta)
+            self.y = collision_point[1] - self.map.wallBuffer * np.sin(theta)
 
             self.obstacleCount += 1
             self.obstaclePub.publish(self.obstacleCount)
+
+            # check if point is inside an obstacle
+            for obstacle in self.map.obstacles:
+                if obstacle.isPointInObstacle(
+                    collision_point, self.map.obstacles_timeout
+                ):
+                    self.map.isMapUpdated = True
+                    break
 
     def checkCheckpoint(self, simTime):
         if not self.isControlled:
@@ -251,12 +261,14 @@ class Car:
         ranges = self.map.getRanges(self.name, x, y, global_thetas)
 
         # set the ranges
-        scan.ranges = ranges
+        scan.ranges = np.clip(ranges, self.lidarRangeMin, self.lidarRangeMax)
 
         return scan
 
     def resetCallback(self, msg):
-        print("Resetting pose: ", msg.position.x, msg.position.y, msg.orientation.z)
+        print(
+            f"{self.name} Resetting pose: {msg.position.x}, {msg.position.y}, {msg.orientation.z}"
+        )
 
         self.x = msg.position.x
         self.y = msg.position.y
@@ -276,7 +288,9 @@ class Car:
         self.pathPub.publish(self.path)
 
     def resetBoolCallback(self, msg):
-        print("Resetting pose: ", 0, 0, 0)
+        if not msg.data:
+            return
+        print(f"{self.name} Resetting pose: {msg.data}")
 
         self.x = 0
         self.y = 0

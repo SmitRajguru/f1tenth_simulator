@@ -2,17 +2,17 @@
 
 simulatorRate: 50 # Hz
 
-useMap: False
+useMap: True
 useLidar: True
 
 map:
-  # path: "maps/iROS23.png"
-  path: "maps/iROS23wObstacles.png"
+  path: "maps/iROS23.png"
+  # path: "maps/iROS23wObstacles.png"
   origin: [-16.638911, -1.603149, 0.000000] # m
   # origin: [0, 0, 0.000000] # m
   resolution: 0.025000 # m/cell
   occupied_thresh: 0.196
-  wallBuffer: 0.1 # m
+  wallBuffer: 0.15 # m
   obstacles: 
     timeout: 5 # s
     list: [] # list of obstacles
@@ -32,4 +32,4 @@ car_1:
     angleMax: 2.35619 # 135 degrees
     angleIncrement: 0.00436332 # 0.25 degrees
     rangeMin: 0.1 # m
-    rangeMax: 10.0 # m
+    rangeMax: 30.0 # m
