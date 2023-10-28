@@ -3,25 +3,49 @@
 # import libraries
 import numpy as np
 from PIL import Image, ImageOps
+from nav_msgs.msg import OccupancyGrid
+import rospy
+import range_libc
 
 
 class Map:
     def __init__(
-        self, map, origin, resolution, occupied_thresh, wallBuffer, checkpointParams
+        self,
+        map,
+        origin,
+        resolution,
+        occupied_thresh,
+        wallBuffer,
+        obstaclesParams,
+        checkpointParams,
     ) -> None:
+        self.mapPub = rospy.Publisher("/map", OccupancyGrid, queue_size=1, latch=True)
+
         # load the map
         self.map = np.asarray(ImageOps.grayscale(Image.open(map))).copy()
 
         # invert the map so that 0 is free and 255 is occupied
         self.map = 255 - self.map
 
+        # scale the map to be between 0 and 100
+        self.map = (self.map / 255) * 100
+
+        # round the map to the nearest integer
+        self.map = np.round(self.map).astype(np.uint8)
+
         # flip the map so that 0,0 is in the bottom left
-        self.map = np.flip(self.map, axis=0)
+        # self.map = np.flip(self.map, axis=0)
+
+        # rotate map -90 degrees
+        # self.map = np.rot90(self.map, k=1, axes=(0, 1))
+
+        # rotate map 90 degrees
+        self.map = np.rot90(self.map, k=1, axes=(1, 0))
 
         self.origin = origin
         self.resolution = resolution
 
-        self.occupied_thresh = int(occupied_thresh * 255)
+        self.occupied_thresh = int(occupied_thresh * 100)
 
         self.wallBuffer = wallBuffer
 
@@ -31,12 +55,100 @@ class Map:
         self.checkpoint_thresh = checkpointParams[0]
         self.checkpoints = checkpointParams[1]
 
-        # print(f"Map 0,0: {self.getPixelFromXY(0, 0)}")
+        self.oMap = None
+        self.range_methods = {}
+        self.grid = OccupancyGrid()
+        self.gridData = self.map.copy()
+        self.initGrid()
+
+        self.obstacles = []
+        self.obstacleTimeout = obstaclesParams[0]
+        for obstacle in obstaclesParams[1]:
+            self.obstacles.append(
+                Obstacle(
+                    obstacle[0],
+                    obstacle[1],
+                    obstacle[2],
+                    self.resolution,
+                )
+            )
+
+        self.isMapUpdated = True
+        self.updateObstacles()
+
+    def initGrid(self):
+        self.grid.header.frame_id = "map"
+        self.grid.info.resolution = self.resolution
+        self.grid.info.width = self.width
+        self.grid.info.height = self.height
+        self.grid.info.origin.position.x = self.origin[0]
+        self.grid.info.origin.position.y = self.origin[1]
+        self.grid.info.origin.position.z = 0
+        self.grid.info.origin.orientation.x = 0
+        self.grid.info.origin.orientation.y = 0
+        self.grid.info.origin.orientation.z = 0
+        self.grid.info.origin.orientation.w = 1
+
+    def initRangeMethods(self):
+        for key, value in self.range_methods.items():
+            value["range_method"] = self.getRangeMethod(
+                value["max_range"], value["num_thetas"]
+            )
+
+    def addCar(self, car, max_range, num_thetas):
+        self.range_methods[car] = {
+            "range_method": self.getRangeMethod(max_range, num_thetas),
+            "max_range": max_range,
+            "num_thetas": num_thetas,
+        }
+
+    def getRangeMethod(self, max_range, num_thetas):
+        return range_libc.PyCDDTCast(
+            self.oMap,
+            max_range / self.resolution,  # max range in pixels
+            num_thetas,  # theta discretization
+        )
+
+    def update(self, dt):
+        # update the obstacles
+        for obstacle in self.obstacles:
+            if obstacle.update(dt):
+                self.isMapUpdated = True
+
+        # update the obstacles
+        self.updateObstacles()
+
+        if self.isMapUpdated:
+            self.oMap = range_libc.PyOMap(self.grid)
+            self.initRangeMethods()
+            self.mapPub.publish(self.grid)
+            self.isMapUpdated = False
+
+    def updateObstacles(self):
+        # reset the map
+        self.gridData = self.map.copy()
+
+        # add the obstacles to the map
+        for obstacle in self.obstacles:
+            if obstacle.isActive:
+                self.gridData[
+                    int(obstacle.O[1] / self.resolution) : int(
+                        (obstacle.O[1] + obstacle.H) / self.resolution
+                    ),
+                    int(obstacle.O[0] / self.resolution) : int(
+                        (obstacle.O[0] + obstacle.W) / self.resolution
+                    ),
+                ] = 100
+
+        self.grid.data = self.gridData.T.flatten().tolist()
+
+        if self.oMap is None:
+            self.oMap = range_libc.PyOMap(self.grid)
 
     def getPixelFromXY(self, x, y):
         # convert from meters to pixels
-        x = int((x - self.origin[0]) / self.resolution)
-        y = int((y - self.origin[1]) / self.resolution)
+        x = int((x + self.origin[0]) / self.resolution)
+        y = int((y + self.origin[1]) / self.resolution)
 
         # check if the pixel is within the map
         if x < 0 or x >= self.height or y < 0 or y >= self.width:
@@ -62,3 +174,84 @@ class Map:
                 return x, y
 
         return None
+
+    def getRange(self, x, y, theta, car):
+        range = self.range_method[car]["range_method"].calc_range(x, y, theta)
+        return range
+
+    def getRanges(self, car, x, y, thetas):
+        queries = np.zeros((len(thetas), 3), dtype=np.float32)
+        ranges = np.zeros(len(thetas), dtype=np.float32)
+
+        queries[:, 0] = x
+        queries[:, 1] = y
+        queries[:, 2] = thetas
+
+        self.range_methods[car]["range_method"].calc_range_many(queries, ranges)
+
+        return ranges
+
+
+class Obstacle:
+    def __init__(self, O, W, H, resolution) -> None:
+        self.O = O
+        self.W = W
+        self.H = H
+        self.resolution = resolution
+
+        self.isActive = True
+        self.timer = 0
+        self.updated = False
+
+        # generate rectangle points
+        self.pts = np.array(
+            [[O[0], O[1]], [O[0] + W, O[1]], [O[0] + W, O[1] + H], [O[0], O[1] + H]]
+        )
+
+        self.border = []
+        self.generateBorderPoints()
+
+    def update(self, dt):
+        if not self.isActive:
+            self.timer -= dt
+            if self.timer <= 0:
+                self.isActive = True
+                self.updated = True
+
+        if self.updated:
+            self.updated = False
+            return True
+
+        return False
+
+    def isPointInObstacle(self, pt, timer):
+        # check if the point is in the border
+        dist = self.border - pt
+        dist = np.sqrt(dist[:, 0] ** 2 + dist[:, 1] ** 2)
+        if np.any(dist < self.resolution):
+            self.updated = True
+            self.isActive = False
+            self.timer = timer
+            return True
+        return False
+
+    def generateBorderPoints(self):
+        # get points on the rectangle that are resolution apart
+        for i in range(4):
+            # get the start and end points
+            start = self.pts[i]
+            end = self.pts[(i + 1) % 4]
+
+            # get the distance between the points
+            dist = np.sqrt((start[0] - end[0]) ** 2 + (start[1] - end[1]) ** 2)
+
+            # get the number of points to check
+            num_points = int(dist / self.resolution)
+
+            # get the x,y of the points to check
+            x_list = np.linspace(start[0], end[0], num_points)
+            y_list = np.linspace(start[1], end[1], num_points)
+
+            self.border.extend(np.array([x_list, y_list]).T.tolist())
+
+        self.border = np.array(self.border)

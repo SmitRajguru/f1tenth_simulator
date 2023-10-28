@@ -50,14 +50,18 @@ class Simulator:
         resolution = rospy.get_param("~map/resolution")
         occupied_thresh = rospy.get_param("~map/occupied_thresh")
         wallBuffer = rospy.get_param("~map/wallBuffer")
-        checkpointParams = rospy.get_param("~map/checkpointParams")
+        obstacles_timeout = rospy.get_param("~map/obstacles/timeout")
+        obstacles_list = rospy.get_param("~map/obstacles/list")
+        checkpoints_threshold = rospy.get_param("~map/checkpoints/threshold")
+        checkpoints_list = rospy.get_param("~map/checkpoints/list")
         self.map = Map(
             f"{path}/{map}",
             origin,
             resolution,
             occupied_thresh,
             wallBuffer,
-            checkpointParams,
+            (obstacles_timeout, obstacles_list),
+            (checkpoints_threshold, checkpoints_list),
         )
         self.reset = False
 
@@ -80,6 +84,9 @@ class Simulator:
 
             # update all cars
             self.UpdateCars()
+
+            # update the map
+            self.map.update(self.simTime)
 
             # update the simulation time
             self.simTime += self.simulator_dt

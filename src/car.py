@@ -36,7 +36,13 @@ class Car:
         self.lidarAngleIncrement = rospy.get_param(f"~{car_name}/lidar/angleIncrement")
         self.lidarRangeMin = rospy.get_param(f"~{car_name}/lidar/rangeMin")
         self.lidarRangeMax = rospy.get_param(f"~{car_name}/lidar/rangeMax")
-
+        self.lidarCount = (
+            int((self.lidarAngleMax - self.lidarAngleMin) / self.lidarAngleIncrement)
+            + 1
+        )
+        self.thetas = np.linspace(
+            self.lidarAngleMin, self.lidarAngleMax, self.lidarCount
+        )
         self.lastLidarTime = None
 
         # Lap Parameters
@@ -61,6 +67,8 @@ class Car:
         self.path = Path()
         self.last_path_time = rospy.Time.now()
         self.sequenceId = 0
+
+        self.map.addCar(self.name, self.lidarRangeMax, self.lidarCount)
 
         self.carTF = tf.TransformBroadcaster()
 
@@ -236,39 +244,11 @@ class Car:
         scan.range_min = self.lidarRangeMin
         scan.range_max = self.lidarRangeMax
 
-        # get the number of rays
-        num_rays = (
-            int((self.lidarAngleMax - self.lidarAngleMin) / self.lidarAngleIncrement)
-            + 1
-        )
+        # get the global slope of the rays
+        global_thetas = self.thetas + yaw
 
-        # get the slope of the rays
-        slope = np.linspace(self.lidarAngleMin, self.lidarAngleMax, num_rays)
-
-        # get collision points for each ray
-        ranges = []
-        for i in range(num_rays):
-            # get the collision point
-            collision_point = self.map.getEdge(
-                x,
-                y,
-                x + self.lidarRangeMax * np.cos(yaw + slope[i]),
-                y + self.lidarRangeMax * np.sin(yaw + slope[i]),
-            )
-
-            # get the distance to the collision point
-            if collision_point is None:
-                ranges.append(self.lidarRangeMax)
-            else:
-                ranges.append(
-                    max(
-                        np.sqrt(
-                            (collision_point[0] - x) ** 2
-                            + (collision_point[1] - y) ** 2
-                        ),
-                        self.lidarRangeMin,
-                    )
-                )
+        # get the ranges
+        ranges = self.map.getRanges(self.name, x, y, global_thetas)
 
         # set the ranges
         scan.ranges = ranges
