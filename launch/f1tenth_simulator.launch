@@ -1,0 +1,9 @@
+<?xml version='1.0'?>
+
+<launch>
+    <node name="f1tenth_simulator" pkg="f1tenth_simulator" type="simulator.py" output="screen">
+        <rosparam command="load" file="$(find f1tenth_simulator)/config/f1tenth_simulator.yaml" />
+    </node>
+    <node pkg="tf" type="static_transform_publisher" name="world_to_world_frame" args="0 0 0 0 0 0 world world_frame 10" />
+    <node pkg="tf" type="static_transform_publisher" name="world_to_map" args="0 0 0 0 0 0 world map 10" />    
+</launch>

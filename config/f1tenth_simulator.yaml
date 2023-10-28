@@ -1,0 +1,29 @@
+
+
+simulatorRate: 20 # Hz
+
+useMap: True
+useLidar: True
+
+map:
+  # path: "maps/iROS23.png"
+  path: "maps/iROS23wObstacles.png"
+  origin: [-16.638911, -1.603149, 0.000000] # m
+  resolution: 0.025000 # m/cell
+  occupied_thresh: 0.196
+  wallBuffer: 0.1 # m
+  checkpointParams: [1,[[0,0],[7.5,3],[-1,4.5],[-13,2]]] # threshold(m) and list of checkpoints
+
+cars: ["car_1"]
+  
+car_1:
+  invertSteering: True
+  WB: 0.324 # wheel base (m)
+  steeringMax: 0.6 # max steering angle (rad)
+  lidar:
+    updateRate: 40 # Hz
+    angleMin: -2.35619 # -135 degrees
+    angleMax: 2.35619 # 135 degrees
+    angleIncrement: 0.00436332 # 0.25 degrees
+    rangeMin: 0.1 # m
+    rangeMax: 30.0 # m
