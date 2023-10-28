@@ -58,7 +58,6 @@ class Map:
         self.oMap = None
         self.range_methods = {}
         self.grid = OccupancyGrid()
-        self.gridData = self.map.copy()
         self.initGrid()
 
         self.obstacles = []
@@ -69,6 +68,7 @@ class Map:
                     obstacle[0],
                     obstacle[1],
                     obstacle[2],
+                    obstacle[3],
                     self.resolution,
                 )
             )
@@ -135,14 +135,23 @@ class Map:
         # add the obstacles to the map
         for obstacle in self.obstacles:
             if obstacle.isActive:
-                self.gridData[
-                    int(obstacle.O[1] / self.resolution) : int(
-                        (obstacle.O[1] + obstacle.H) / self.resolution
-                    ),
-                    int(obstacle.O[0] / self.resolution) : int(
-                        (obstacle.O[0] + obstacle.W) / self.resolution
-                    ),
-                ] = 100
+                # get the points in the obstacle
+                points = np.round(obstacle.border / self.resolution).astype(np.int32)
+                # add the origin to the points
+                points -= np.array(
+                    [self.origin[0] / self.resolution, self.origin[1] / self.resolution]
+                ).astype(np.int32)
+
+                # set the points and little around in the map to be occupied
+                for point in points:
+                    self.gridData[
+                        int(point[0] - self.wallBuffer / 2 * self.resolution) : int(
+                            point[0] + self.wallBuffer / 2 * self.resolution
+                        ),
+                        int(point[1] - self.wallBuffer / 2 * self.resolution) : int(
+                            point[1] + self.wallBuffer / 2 * self.resolution
+                        ),
+                    ] = 50
 
         self.grid.data = self.gridData.T.flatten().tolist()
 
@@ -193,11 +202,12 @@ class Obstacle:
 
         return False
 
-    def isPointInObstacle(self, pt, timer):
+    def isPointInObstacle(self, pt, thresh, timer):
         # check if the point is in the border
         dist = self.border - pt
         dist = np.sqrt(dist[:, 0] ** 2 + dist[:, 1] ** 2)
-        if np.any(dist < self.resolution):
+
+        if np.any(dist <= thresh + 2 * self.resolution):
             self.updated = True
             self.isActive = False
             self.timer = timer

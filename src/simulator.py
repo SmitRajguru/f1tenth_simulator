@@ -77,16 +77,21 @@ class Simulator:
         for car in self.cars:
             car.update(self.simulator_dt, self.simTime)
 
+    def killCars(self):
+        for car in self.cars:
+            car.kill()
+
     def run(self):
         while not rospy.is_shutdown():
             if self.reset:
+                self.killCars()
                 raise Exception("Resetting simulator")
 
             # update all cars
             self.UpdateCars()
 
             # update the map
-            self.map.update(self.simTime)
+            self.map.update(self.simulator_dt)
 
             # update the simulation time
             self.simTime += self.simulator_dt

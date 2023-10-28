@@ -15,7 +15,7 @@ map:
   wallBuffer: 0.15 # m
   obstacles: 
     timeout: 5 # s
-    list: [] # list of obstacles
+    list: [[[1,0.5],[1,-0.5],[2,-0.5],[2,0.5]]] # list of obstacles
   checkpoints: 
     threshold: 1 # m
     list: [[0,0],[7.5,3],[-1,4.5],[-13,2]] # list of checkpoints

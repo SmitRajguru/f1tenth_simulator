@@ -14,6 +14,7 @@ from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import LaserScan
 from visualization_msgs.msg import Marker
 import tf
+import threading
 
 
 # create a car class
@@ -30,7 +31,6 @@ class Car:
 
         # lidar parameters
         self.lidarUpdateRate = rospy.get_param(f"~{car_name}/lidar/updateRate")
-        self.lidarUpdatedt = 1.0 / self.lidarUpdateRate
         self.lidarAngleMin = rospy.get_param(f"~{car_name}/lidar/angleMin")
         self.lidarAngleMax = rospy.get_param(f"~{car_name}/lidar/angleMax")
         self.lidarAngleIncrement = rospy.get_param(f"~{car_name}/lidar/angleIncrement")
@@ -43,7 +43,12 @@ class Car:
         self.thetas = np.linspace(
             self.lidarAngleMin, self.lidarAngleMax, self.lidarCount
         )
-        self.lastLidarTime = None
+        self.lidarThread_stop = False
+        self.lidarThread = threading.Thread(
+            target=self.lidarThreadCallback,
+            daemon=True,
+            args=(self.lidarUpdateRate,),
+        )
 
         # Lap Parameters
         self.lapCount = 0
@@ -102,6 +107,9 @@ class Car:
             "/" + car_name + "/resetBool", Bool, self.resetBoolCallback
         )
 
+        if self.useLidar:
+            self.lidarThread.start()
+
     def commandCallback(self, msg):
         print(f"{self.name} Command: {msg.steering_angle}, {msg.speed}")
         self.isControlled = True
@@ -112,6 +120,10 @@ class Car:
         )
         if self.invertSteering:
             self.steering_angle = -msg.steering_angle
+
+    def kill(self):
+        self.isControlled = False
+        self.lidarThread_stop = True
 
     def update(self, dt, simTime):
         # update previous values
@@ -138,13 +150,6 @@ class Car:
 
             # check if the car has crossed a checkpoint
             self.checkCheckpoint(simTime)
-
-        if (
-            self.lastLidarTime is None
-            or simTime >= self.lastLidarTime + self.lidarUpdatedt
-        ) and self.useLidar:
-            self.lastLidarTime = simTime
-            self.publishLidar()
 
         self.publishTF()
         self.publishOdometry()
@@ -176,7 +181,7 @@ class Car:
             # check if point is inside an obstacle
             for obstacle in self.map.obstacles:
                 if obstacle.isPointInObstacle(
-                    collision_point, self.map.obstacles_timeout
+                    collision_point, self.map.wallBuffer / 2, self.map.obstacleTimeout
                 ):
                     self.map.isMapUpdated = True
                     break
@@ -237,6 +242,12 @@ class Car:
         checkpoint.color.b = 0.0
 
         self.checkpointPub.publish(checkpoint)
+
+    def lidarThreadCallback(self, updateRate):
+        rate = rospy.Rate(updateRate)
+        while not self.lidarThread_stop:
+            self.publishLidar()
+            rate.sleep()
 
     def publishLidar(self):
         scan = self.lidarCallback(self.x, self.y, self.yaw)
