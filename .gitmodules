@@ -1,0 +1,2 @@
+[submodule "lib/range_libc"]
+	url = https://github.com/SmitRajguru/range_libc.git
