@@ -29,6 +29,9 @@ class Simulator:
             "/reset_sim", Bool, self.resetSim, queue_size=1
         )
 
+        # create a list of cars
+        self.cars = {}
+
         # initialize the simulator
         self.initSim()
 
@@ -39,14 +42,14 @@ class Simulator:
         self.useMap = bool(rospy.get_param("~useMap"))
         self.useLidar = bool(rospy.get_param("~useLidar"))
 
-        # create a list of cars
-        self.cars = []
-
         # set the update rate
         self.simulatorRate = rospy.get_param("~simulatorRate")
         self.simulator_dt = 1.0 / self.simulatorRate
         self.rate = rospy.Rate(self.simulatorRate)
 
+        self.reset = False
+
+    def initMap(self):
         # load the map
         map = rospy.get_param("~map/path")
         origin = rospy.get_param("~map/origin")
@@ -66,34 +69,62 @@ class Simulator:
             (obstacles_timeout, obstacles_list),
             (checkpoints_threshold, checkpoints_list),
         )
-        self.reset = False
+
+    def destroyMap(self):
+        self.map.remove()
 
     def resetSim(self, msg):
         self.reset = msg.data
 
-    def AddCar(self, car_name):
-        # create a car
-        self.cars.append(Car(car_name, (self.map, self.useMap), self.useLidar))
-
     def UpdateCars(self):
         # update all cars
-        for car in self.cars:
-            car.update(self.simulator_dt, self.simTime)
+        for car in self.cars.keys():
+            self.cars[car].update(self.simulator_dt, self.simTime)
 
-    def killCars(self):
-        for car in self.cars:
-            car.kill()
+    def initCars(self):
+        car_list = rospy.get_param("~cars")
+        remove_cars = []
+        add_cars = []
+        update_cars = []
+
+        for car in self.cars.keys():
+            if car in car_list:
+                update_cars.append(car)
+            else:
+                remove_cars.append(car)
+
+        for car in car_list:
+            if car not in update_cars:
+                add_cars.append(car)
+
+        for car in remove_cars:
+            # remove a car
+            self.cars[car].remove()
+            del self.cars[car]
+
+        for car in add_cars:
+            # create a car
+            self.cars[car] = Car(car, (self.map, self.useMap), self.useLidar)
+        for car in update_cars:
+            self.cars[car].updateParams((self.map, self.useMap), self.useLidar)
+
+    def destroyCars(self):
+        for car in self.cars.keys():
+            self.cars[car].remove()
 
     def run(self):
         while not rospy.is_shutdown():
+            if self.reset:
+                self.destroyMap()
+                self.initSim()
+                self.initMap()
+                self.initCars()
+                print("Resetting simulator")
+
             # publish the delta time
             self.simDtimePub.publish(self.simulator_dt)
             self.rosDtimePub.publish(rospy.get_time() - self.rostime)
             self.rostime = rospy.get_time()
-
-            if self.reset:
-                self.killCars()
-                raise Exception("Resetting simulator")
 
             # update all cars
             self.UpdateCars()
@@ -111,12 +142,8 @@ class Simulator:
 
 if __name__ == "__main__":
     sim = Simulator()
-    while not rospy.is_shutdown():
-        try:
-            for car in rospy.get_param("~cars"):
-                sim.AddCar(car)
-            sim.run()
-        except Exception as e:
-            print(e)
-        finally:
-            sim.initSim()
+    sim.initMap()
+    sim.initCars()
+    sim.run()
+    sim.destroyCars()
+    sim.map.remove()

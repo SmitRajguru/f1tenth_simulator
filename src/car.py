@@ -21,59 +21,11 @@ import threading
 class Car:
     def __init__(self, car_name, map_params, lidar_params) -> None:
         self.name = car_name
-        self.map, self.useMap = map_params
-        self.useLidar = lidar_params
-
-        # car parameters
-        self.WB = rospy.get_param(f"~{car_name}/WB")
-        self.steeringMax = rospy.get_param(f"~{car_name}/steeringMax")
-        self.invertSteering = rospy.get_param(f"~{car_name}/invertSteering")
-
-        # lidar parameters
-        self.lidarUpdateRate = rospy.get_param(f"~{car_name}/lidar/updateRate")
-        self.lidarAngleMin = rospy.get_param(f"~{car_name}/lidar/angleMin")
-        self.lidarAngleMax = rospy.get_param(f"~{car_name}/lidar/angleMax")
-        self.lidarAngleIncrement = rospy.get_param(f"~{car_name}/lidar/angleIncrement")
-        self.lidarRangeMin = rospy.get_param(f"~{car_name}/lidar/rangeMin")
-        self.lidarRangeMax = rospy.get_param(f"~{car_name}/lidar/rangeMax")
-        self.lidarCount = (
-            int((self.lidarAngleMax - self.lidarAngleMin) / self.lidarAngleIncrement)
-            + 1
-        )
-        self.thetas = np.linspace(
-            self.lidarAngleMin, self.lidarAngleMax, self.lidarCount
-        )
+        self.lidarPub = None
+        self.lidarThread = None
         self.lidarThread_stop = False
-        self.lidarThread = threading.Thread(
-            target=self.lidarThreadCallback,
-            daemon=True,
-            args=(self.lidarUpdateRate,),
-        )
 
-        # Lap Parameters
-        self.lapCount = 0
-        self.lapStartTime = None
-        self.checkpointIndex = 0
-        self.obstacleCount = 0
-        self.isControlled = False
-
-        # car dynamics
-        self.x = 0.0
-        self.y = 0.0
-        self.yaw = 0.0
-        self.velocity = 0.0
-        self.angular_velocity = 0.0
-        self.steering_angle = 0.0
-
-        self.prev_x = 0.0
-        self.prev_y = 0.0
-        self.prev_yaw = 0.0
-
-        self.path = Path()
-        self.last_path_time = rospy.Time.now()
-        self.sequenceId = 0
-
-        self.map.addCar(self.name, self.lidarRangeMax, self.lidarCount)
+        self.updateParams(map_params, lidar_params)
 
         self.carTF = tf.TransformBroadcaster()
 
@@ -107,11 +59,83 @@ class Car:
             "/" + car_name + "/resetBool", Bool, self.resetBoolCallback
         )
 
+    def remove(self):
+        self.commandSub.unregister()
+        self.resetSub.unregister()
+        self.resetboolSub.unregister()
+
+        self.lidarThread_stop = True
+        if self.lidarThread is not None:
+            self.lidarThread.join()
+
+        self.map.removeCar(self.name)
+
+    def updateParams(self, map_params, lidar_params):
+        self.lidarThread_stop = True
+        if self.lidarThread is not None:
+            self.lidarThread.join()
+
+        self.map, self.useMap = map_params
+        self.useLidar = lidar_params
+
+        # car parameters
+        self.WB = rospy.get_param(f"~{self.name}/WB")
+        self.steeringMax = rospy.get_param(f"~{self.name}/steeringMax")
+        self.invertSteering = rospy.get_param(f"~{self.name}/invertSteering")
+
+        # lidar parameters
+        self.lidarUpdateRate = rospy.get_param(f"~{self.name}/lidar/updateRate")
+        self.lidarAngleMin = rospy.get_param(f"~{self.name}/lidar/angleMin")
+        self.lidarAngleMax = rospy.get_param(f"~{self.name}/lidar/angleMax")
+        self.lidarAngleIncrement = rospy.get_param(f"~{self.name}/lidar/angleIncrement")
+        self.lidarRangeMin = rospy.get_param(f"~{self.name}/lidar/rangeMin")
+        self.lidarRangeMax = rospy.get_param(f"~{self.name}/lidar/rangeMax")
+        self.lidarCount = (
+            int((self.lidarAngleMax - self.lidarAngleMin) / self.lidarAngleIncrement)
+            + 1
+        )
+        self.thetas = np.linspace(
+            self.lidarAngleMin, self.lidarAngleMax, self.lidarCount
+        )
+        self.lidarThread_stop = False
+
+        self.map.addCar(self.name, self.lidarRangeMax, self.lidarCount)
+
+        # Lap Parameters
+        self.lapCount = 0
+        self.lapStartTime = None
+        self.checkpointIndex = 0
+        self.obstacleCount = 0
+        self.isControlled = False
+
+        # car dynamics
+        self.x = 0.0
+        self.y = 0.0
+        self.yaw = 0.0
+        self.velocity = 0.0
+        self.angular_velocity = 0.0
+        self.steering_angle = 0.0
+
+        self.prev_x = 0.0
+        self.prev_y = 0.0
+        self.prev_yaw = 0.0
+
+        self.path = Path()
+        self.last_path_time = rospy.Time.now()
+        self.sequenceId = 0
+
         if self.useLidar:
+            self.lidarThread = threading.Thread(
+                target=self.lidarThreadCallback,
+                daemon=True,
+                args=(self.lidarUpdateRate,),
+            )
             self.lidarThread.start()
+        else:
+            self.lidarThread = None
 
     def commandCallback(self, msg):
-        print(f"{self.name} Command: {msg.steering_angle}, {msg.speed}")
+        # print(f"{self.name} Command: {msg.steering_angle}, {msg.speed}")
         self.isControlled = True
 
         self.velocity = msg.speed
@@ -253,7 +277,8 @@ class Car:
         scan = self.lidarCallback(self.x, self.y, self.yaw)
         scan.header.stamp = rospy.Time.now()
 
-        self.lidarPub.publish(scan)
+        if self.lidarPub is not None:
+            self.lidarPub.publish(scan)
 
     def lidarCallback(self, x, y, yaw):
         # get the laser scan

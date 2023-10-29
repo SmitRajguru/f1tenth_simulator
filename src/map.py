@@ -89,6 +89,9 @@ class Map:
         self.grid.info.origin.orientation.z = 0
         self.grid.info.origin.orientation.w = 1
 
+    def remove(self):
+        self.mapPub.unregister()
+
     def initRangeMethods(self):
         for key, value in self.range_methods.items():
             value["range_method"] = self.getRangeMethod(
@@ -101,6 +104,9 @@ class Map:
             "max_range": max_range,
             "num_thetas": num_thetas,
         }
+
+    def removeCar(self, car):
+        del self.range_methods[car]
 
     def getRangeMethod(self, max_range, num_thetas):
         return range_libc.PyCDDTCast(
