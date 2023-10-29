@@ -22,6 +22,8 @@ rospy.init_node("simulator", anonymous=True)
 class Simulator:
     def __init__(self) -> None:
         self.simTimePub = rospy.Publisher("/sim_time", Float64, queue_size=1)
+        self.simDtimePub = rospy.Publisher("/sim_dtime", Float64, queue_size=1)
+        self.rosDtimePub = rospy.Publisher("/ros_dtime", Float64, queue_size=1)
 
         self.resetSub = rospy.Subscriber(
             "/reset_sim", Bool, self.resetSim, queue_size=1
@@ -32,6 +34,7 @@ class Simulator:
 
     def initSim(self):
         self.simTime = 0.0
+        self.rostime = rospy.get_time()
 
         self.useMap = bool(rospy.get_param("~useMap"))
         self.useLidar = bool(rospy.get_param("~useLidar"))
@@ -83,6 +86,11 @@ class Simulator:
 
     def run(self):
         while not rospy.is_shutdown():
+            # publish the delta time
+            self.simDtimePub.publish(self.simulator_dt)
+            self.rosDtimePub.publish(rospy.get_time() - self.rostime)
+            self.rostime = rospy.get_time()
+
             if self.reset:
                 self.killCars()
                 raise Exception("Resetting simulator")
