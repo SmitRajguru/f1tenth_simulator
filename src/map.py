@@ -11,15 +11,13 @@ import range_libc
 class Map:
     def __init__(
         self,
-        map,
-        origin,
-        resolution,
-        occupied_thresh,
-        wallBuffer,
+        mapParams,
         obstaclesParams,
         checkpointParams,
     ) -> None:
         self.mapPub = rospy.Publisher("/map", OccupancyGrid, queue_size=1, latch=True)
+
+        (map, origin, resolution, occupied_thresh, wallBuffer, useMap) = mapParams
 
         # load the map
         self.map = np.asarray(ImageOps.grayscale(Image.open(map))).copy()
@@ -42,6 +40,7 @@ class Map:
         # rotate map 90 degrees
         self.map = np.rot90(self.map, k=1, axes=(1, 0))
 
+        self.useMap = useMap
         self.origin = origin
         self.resolution = resolution
 
@@ -131,7 +130,8 @@ class Map:
         if self.isMapUpdated:
             self.oMap = range_libc.PyOMap(self.grid)
             self.initRangeMethods()
-            self.mapPub.publish(self.grid)
+            if self.useMap:
+                self.mapPub.publish(self.grid)
             self.isMapUpdated = False
 
     def updateObstacles(self):

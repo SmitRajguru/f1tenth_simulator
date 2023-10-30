@@ -61,11 +61,14 @@ class Simulator:
         checkpoints_threshold = rospy.get_param("~map/checkpoints/threshold")
         checkpoints_list = rospy.get_param("~map/checkpoints/list")
         self.map = Map(
-            f"{path}/{map}",
-            origin,
-            resolution,
-            occupied_thresh,
-            wallBuffer,
+            (
+                f"{path}/{map}",
+                origin,
+                resolution,
+                occupied_thresh,
+                wallBuffer,
+                self.useMap,
+            ),
             (obstacles_timeout, obstacles_list),
             (checkpoints_threshold, checkpoints_list),
         )
