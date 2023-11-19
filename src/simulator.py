@@ -62,7 +62,7 @@ class Simulator:
         checkpoints_list = rospy.get_param("~map/checkpoints/list")
         self.map = Map(
             (
-                f"{path}/{map}",
+                f"{path}/{map}" if map != "" else "",
                 origin,
                 resolution,
                 occupied_thresh,

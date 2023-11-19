@@ -20,7 +20,10 @@ class Map:
         (map, origin, resolution, occupied_thresh, wallBuffer, useMap) = mapParams
 
         # load the map
-        self.map = np.asarray(ImageOps.grayscale(Image.open(map))).copy()
+        if map == "":
+            self.map = np.ones((100, 100)) * 255
+        else:
+            self.map = np.asarray(ImageOps.grayscale(Image.open(map))).copy()
 
         # invert the map so that 0 is free and 255 is occupied
         self.map = 255 - self.map
