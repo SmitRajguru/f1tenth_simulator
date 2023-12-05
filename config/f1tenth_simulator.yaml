@@ -10,6 +10,10 @@ map:
   origin: [0, 0, 0] # m
   # path: "maps/iROS23.png"
   # origin: [-16.638911, -1.603149, 0.000000] # m
+  publishMap: True
+  mapTopic: "/map"
+  mapFrame: "map"
+  mapRate: 1 # Hz
   resolution: 0.025000 # m/cell
   occupied_thresh: 0.196
   wallBuffer: 0.15 # m

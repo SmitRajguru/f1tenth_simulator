@@ -15,9 +15,20 @@ class Map:
         obstaclesParams,
         checkpointParams,
     ) -> None:
-        self.mapPub = rospy.Publisher("/map", OccupancyGrid, queue_size=1, latch=True)
+        (
+            map,
+            origin,
+            resolution,
+            occupied_thresh,
+            wallBuffer,
+            useMap,
+            publishMap,
+            mapTopic,
+            mapFrame,
+            mapRate,
+        ) = mapParams
 
-        (map, origin, resolution, occupied_thresh, wallBuffer, useMap) = mapParams
+        self.mapPub = rospy.Publisher(mapTopic, OccupancyGrid, queue_size=1, latch=True)
 
         # load the map
         if map == "":
@@ -46,6 +57,13 @@ class Map:
         self.useMap = useMap
         self.origin = origin
         self.resolution = resolution
+
+        self.publishMap = publishMap
+        self.mapTopic = mapTopic
+        self.mapFrame = mapFrame
+        self.mapRate = mapRate
+        self.mapDt = 1.0 / self.mapRate
+        self.simTime = 0.0
 
         self.occupied_thresh = int(occupied_thresh * 100)
 
@@ -78,8 +96,12 @@ class Map:
         self.isMapUpdated = True
         self.updateObstacles()
 
+        if self.publishMap:
+            self.mapPub.publish(self.grid)
+            self.mapTime = self.mapDt
+
     def initGrid(self):
-        self.grid.header.frame_id = "map"
+        self.grid.header.frame_id = self.mapFrame
         self.grid.info.resolution = self.resolution
         self.grid.info.width = self.width
         self.grid.info.height = self.height
@@ -122,6 +144,8 @@ class Map:
         # )
 
     def update(self, dt):
+        self.simTime += dt
+
         # update the obstacles
         for obstacle in self.obstacles:
             if obstacle.update(dt):
@@ -130,6 +154,14 @@ class Map:
         # update the obstacles
         self.updateObstacles()
 
+        # publish map at mapRate
+        if self.publishMap:
+            if self.mapRate != 0:
+                if self.simTime >= self.mapTime:
+                    self.mapPub.publish(self.grid)
+                    self.mapTime = self.simTime + self.mapDt
+
+        # update the map
         if self.isMapUpdated:
             self.oMap = range_libc.PyOMap(self.grid)
             self.initRangeMethods()

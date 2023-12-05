@@ -60,6 +60,10 @@ class Simulator:
         obstacles_list = rospy.get_param("~map/obstacles/list")
         checkpoints_threshold = rospy.get_param("~map/checkpoints/threshold")
         checkpoints_list = rospy.get_param("~map/checkpoints/list")
+        publishMap = rospy.get_param("~map/publishMap")
+        mapTopic = rospy.get_param("~map/mapTopic")
+        mapFrame = rospy.get_param("~map/mapFrame")
+        mapRate = rospy.get_param("~map/mapRate")
         self.map = Map(
             (
                 f"{path}/{map}" if map != "" else "",
@@ -68,6 +72,10 @@ class Simulator:
                 occupied_thresh,
                 wallBuffer,
                 self.useMap,
+                publishMap,
+                mapTopic,
+                mapFrame,
+                mapRate,
             ),
             (obstacles_timeout, obstacles_list),
             (checkpoints_threshold, checkpoints_list),
