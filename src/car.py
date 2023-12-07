@@ -211,7 +211,7 @@ class Car:
                     break
 
     def checkCheckpoint(self, simTime):
-        if not self.isControlled:
+        if not self.isControlled or len(self.map.checkpoints) == 0:
             return
         isCheckpointUpdate = False
         isStart = False
