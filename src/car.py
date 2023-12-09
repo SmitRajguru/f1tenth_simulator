@@ -312,6 +312,7 @@ class Car:
         self.velocity = 0.0
         self.angular_velocity = 0.0
         self.steering_angle = 0.0
+        self.isControlled = False
 
         # Lap Parameters
         self.lapCount = 0
@@ -334,6 +335,7 @@ class Car:
         self.velocity = 0.0
         self.angular_velocity = 0.0
         self.steering_angle = 0.0
+        self.isControlled = False
 
         # Lap Parameters
         self.lapCount = 0
