@@ -12,6 +12,7 @@ from tf.transformations import quaternion_from_euler
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import Imu
 from visualization_msgs.msg import Marker
 import tf
 import threading
@@ -29,13 +30,28 @@ class Car:
 
         self.carTF = tf.TransformBroadcaster()
 
-        self.odomPub = rospy.Publisher("/" + car_name + "/odom", Odometry, queue_size=1)
-
-        self.pathPub = rospy.Publisher("/" + car_name + "/path", Path, queue_size=1)
-
-        self.lidarPub = rospy.Publisher(
-            "/" + car_name + "/scan", LaserScan, queue_size=1
-        )
+        if self.amcl:
+            self.odomPub = rospy.Publisher(
+                "/" + car_name + "/amcl/odom", Odometry, queue_size=1
+            )
+            self.pathPub = rospy.Publisher(
+                "/" + car_name + "/amcl/path", Path, queue_size=1
+            )
+            self.imuPub = rospy.Publisher(
+                "/" + car_name + "/amcl/imu", Imu, queue_size=1
+            )
+            self.lidarPub = rospy.Publisher(
+                "/" + car_name + "/amcl/scan", LaserScan, queue_size=1
+            )
+        else:
+            self.odomPub = rospy.Publisher(
+                "/" + car_name + "/odom", Odometry, queue_size=1
+            )
+            self.pathPub = rospy.Publisher("/" + car_name + "/path", Path, queue_size=1)
+            self.imuPub = rospy.Publisher("/" + car_name + "/imu", Imu, queue_size=1)
+            self.lidarPub = rospy.Publisher(
+                "/" + car_name + "/scan", LaserScan, queue_size=1
+            )
         self.checkpointPub = rospy.Publisher(
             "/" + car_name + "/checkpoint", Marker, queue_size=1, latch=True
         )
@@ -79,6 +95,7 @@ class Car:
         self.useLidar = lidar_params
 
         # car parameters
+        self.amcl = bool(rospy.get_param(f"~{self.name}/amcl"))
         self.WB = rospy.get_param(f"~{self.name}/WB")
         self.steeringMax = rospy.get_param(f"~{self.name}/steeringMax")
         self.invertSteering = rospy.get_param(f"~{self.name}/invertSteering")
@@ -100,6 +117,17 @@ class Car:
         self.lidarThread_stop = False
 
         self.map.addCar(self.name, self.lidarRangeMax, self.lidarCount)
+
+        # IMU parameters
+        self.linear_acceleration_variance = rospy.get_param(
+            f"~{self.name}/imu/linear_acceleration_variance"
+        )
+        self.angular_velocity_variance = rospy.get_param(
+            f"~{self.name}/imu/angular_velocity_variance"
+        )
+        self.orientation_variance = rospy.get_param(
+            f"~{self.name}/imu/orientation_variance"
+        )
 
         # Lap Parameters
         self.lapCount = 0
@@ -176,8 +204,7 @@ class Car:
             self.checkCheckpoint(simTime)
 
         self.publishTF()
-        if "amcl" not in self.name:
-            self.publishOdometry()
+        self.publishOdometry()
 
     def checkCollision(self):
         # get angle from previous point to current point
@@ -284,7 +311,10 @@ class Car:
     def lidarCallback(self, x, y, yaw):
         # get the laser scan
         scan = LaserScan()
-        scan.header.frame_id = f"{self.name}/laser"
+        if self.amcl:
+            scan.header.frame_id = f"{self.name}/amcl/laser"
+        else:
+            scan.header.frame_id = f"{self.name}/laser"
         scan.angle_min = self.lidarAngleMin
         scan.angle_max = self.lidarAngleMax
         scan.angle_increment = self.lidarAngleIncrement
@@ -368,7 +398,8 @@ class Car:
 
         odom.twist.twist.angular.z = self.angular_velocity
 
-        self.odomPub.publish(odom)
+        if not self.amcl:
+            self.odomPub.publish(odom)
 
         if (rospy.Time.now() - self.last_path_time).to_sec() < 0.1:
             return
@@ -388,8 +419,58 @@ class Car:
 
         self.pathPub.publish(self.path)
 
+        base_name = f"{self.name}"
+        if self.amcl:
+            base_name = f"{self.name}/amcl"
+
+        # generate IMU message
+        imu = Imu()
+        imu.header.stamp = rospy.Time.now()
+        imu.header.frame_id = f"{base_name}/imu"
+
+        imu.angular_velocity.x = 0
+        imu.angular_velocity.y = 0
+        imu.angular_velocity.z = self.angular_velocity
+
+        imu.linear_acceleration.x = self.velocity * self.angular_velocity
+        imu.linear_acceleration.y = 0
+        imu.linear_acceleration.z = 0
+
+        # add noise to imu
+        imu_orientation = tf.transformations.euler_from_quaternion(
+            [quat[0], quat[1], quat[2], quat[3]]
+        )
+        imu_orientation = np.array(imu_orientation)
+        imu_orientation[0] += np.random.normal(0, self.orientation_variance[0])
+        imu_orientation[1] += np.random.normal(0, self.orientation_variance[1])
+        imu_orientation[2] += np.random.normal(0, self.orientation_variance[2])
+        imu_orientation = tf.transformations.quaternion_from_euler(
+            imu_orientation[0], imu_orientation[1], imu_orientation[2]
+        )
+
+        imu.orientation.x = imu_orientation[0]
+        imu.orientation.y = imu_orientation[1]
+        imu.orientation.z = imu_orientation[2]
+        imu.orientation.w = imu_orientation[3]
+
+        imu.linear_acceleration.x += np.random.normal(
+            0, self.linear_acceleration_variance[0]
+        )
+        imu.linear_acceleration.y += np.random.normal(
+            0, self.linear_acceleration_variance[1]
+        )
+        imu.linear_acceleration.z += np.random.normal(
+            0, self.linear_acceleration_variance[2]
+        )
+
+        imu.angular_velocity.x += np.random.normal(0, self.angular_velocity_variance[0])
+        imu.angular_velocity.y += np.random.normal(0, self.angular_velocity_variance[1])
+        imu.angular_velocity.z += np.random.normal(0, self.angular_velocity_variance[2])
+
+        self.imuPub.publish(imu)
+
     def publishTF(self):
-        if "amcl" not in self.name:
+        if not self.amcl:
             # publish tf from world to base_link
             self.carTF.sendTransform(
                 (self.x, self.y, 0),
@@ -399,13 +480,26 @@ class Car:
                 "world",
             )
 
+        base_name = f"{self.name}"
+        if self.amcl:
+            base_name = f"{self.name}/amcl"
+
         # publish tf from base_link to laser
         self.carTF.sendTransform(
             (0, 0, 0),
             quaternion_from_euler(0, 0, 0),
             rospy.Time.now(),
-            f"{self.name}/laser",
-            f"{self.name}/base_link",
+            f"{base_name}/laser",
+            f"{base_name}/base_link",
+        )
+
+        # publish tf from base_link to imu
+        self.carTF.sendTransform(
+            (0, 0, 0),
+            quaternion_from_euler(0, 0, 0),
+            rospy.Time.now(),
+            f"{base_name}/imu",
+            f"{base_name}/base_link",
         )
 
         # publish tf from base_link to car_name
@@ -413,6 +507,6 @@ class Car:
             (0, 0, 0),
             quaternion_from_euler(0, 0, 0),
             rospy.Time.now(),
-            f"{self.name}",
-            f"{self.name}/base_link",
+            f"{base_name}",
+            f"{base_name}/base_link",
         )

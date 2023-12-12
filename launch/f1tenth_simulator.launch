@@ -5,5 +5,7 @@
         <rosparam command="load" file="$(find f1tenth_simulator)/config/f1tenth_simulator.yaml" />
     </node>
     <node pkg="tf" type="static_transform_publisher" name="world_to_world_frame" args="0 0 0 0 0 0 world world_frame 10" />
-    <node pkg="tf" type="static_transform_publisher" name="world_to_map" args="0 0 0 0 0 0 world map 10" />    
+    <node pkg="tf" type="static_transform_publisher" name="world_to_map" args="0 0 0 0 0 0 world map 10" />
+    <node pkg="tf" type="static_transform_publisher" name="world_to_odom" args="0 0 0 0 0 0 world odom 10" />
+
 </launch>

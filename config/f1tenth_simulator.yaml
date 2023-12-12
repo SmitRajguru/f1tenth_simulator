@@ -54,6 +54,7 @@ map:
 cars: ["car_1"]
   
 car_1:
+  amcl: False
   invertSteering: True
   WB: 0.324 # wheel base (m)
   steeringMax: 0.6 # max steering angle (rad)
@@ -64,3 +65,7 @@ car_1:
     angleIncrement: 0.00436332 # 0.25 degrees
     rangeMin: 0.1 # m
     rangeMax: 30.0 # m
+  imu:
+    linear_acceleration_variance: [0.01, 0.01, 0.01] # m^2/s^4
+    angular_velocity_variance: [0.01, 0.01, 0.01] # rad^2/s^2
+    orientation_variance: [0.001, 0.001, 0.001] # rad^2
