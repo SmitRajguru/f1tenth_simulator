@@ -74,26 +74,26 @@ while True:
         continue
 
 
-# # print obstacles as a yaml list
-# for obs in obstacles:
-#     s = ""
-#     for pt in obs:
-#         pt = pt * resolution
-#         pt[1] = height_m - pt[1]
-#         pt[0] += origin[0]
-#         pt[1] += origin[1]
-
-#         s += "[{}, {}],".format(round(pt[0], 2), round(pt[1], 2))
-#     s = s[:-1]
-#     print("  - [{}]".format(s))
-
-
-# print checkpoints as a yaml list
+# print obstacles as a yaml list
 for obs in obstacles:
+    s = ""
     for pt in obs:
         pt = pt * resolution
         pt[1] = height_m - pt[1]
         pt[0] += origin[0]
         pt[1] += origin[1]
 
-        print("  - [{}, {}]".format(round(pt[0], 2), round(pt[1], 2)))
+        s += "[{}, {}],".format(round(pt[0], 2), round(pt[1], 2))
+    s = s[:-1]
+    print("  - [{}]".format(s))
+
+
+# # print checkpoints as a yaml list
+# for obs in obstacles:
+#     for pt in obs:
+#         pt = pt * resolution
+#         pt[1] = height_m - pt[1]
+#         pt[0] += origin[0]
+#         pt[1] += origin[1]
+
+#         print("  - [{}, {}]".format(round(pt[0], 2), round(pt[1], 2)))

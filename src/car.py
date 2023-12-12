@@ -176,7 +176,8 @@ class Car:
             self.checkCheckpoint(simTime)
 
         self.publishTF()
-        self.publishOdometry()
+        if "amcl" not in self.name:
+            self.publishOdometry()
 
     def checkCollision(self):
         # get angle from previous point to current point
@@ -388,14 +389,15 @@ class Car:
         self.pathPub.publish(self.path)
 
     def publishTF(self):
-        # publish tf from world to base_link
-        self.carTF.sendTransform(
-            (self.x, self.y, 0),
-            quaternion_from_euler(0, 0, self.yaw),
-            rospy.Time.now(),
-            f"{self.name}/base_link",
-            "world",
-        )
+        if "amcl" not in self.name:
+            # publish tf from world to base_link
+            self.carTF.sendTransform(
+                (self.x, self.y, 0),
+                quaternion_from_euler(0, 0, self.yaw),
+                rospy.Time.now(),
+                f"{self.name}/base_link",
+                "world",
+            )
 
         # publish tf from base_link to laser
         self.carTF.sendTransform(
