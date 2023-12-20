@@ -31,9 +31,6 @@ class Car:
         self.carTF = tf.TransformBroadcaster()
 
         if self.amcl:
-            self.odomPub = rospy.Publisher(
-                "/" + car_name + "/amcl/odom", Odometry, queue_size=1
-            )
             self.pathPub = rospy.Publisher(
                 "/" + car_name + "/amcl/path", Path, queue_size=1
             )
@@ -47,11 +44,12 @@ class Car:
             self.odomPub = rospy.Publisher(
                 "/" + car_name + "/odom", Odometry, queue_size=1
             )
-            self.pathPub = rospy.Publisher("/" + car_name + "/path", Path, queue_size=1)
+
             self.imuPub = rospy.Publisher("/" + car_name + "/imu", Imu, queue_size=1)
             self.lidarPub = rospy.Publisher(
                 "/" + car_name + "/scan", LaserScan, queue_size=1
             )
+        self.pathPub = rospy.Publisher("/" + car_name + "/path", Path, queue_size=1)
         self.checkpointPub = rospy.Publisher(
             "/" + car_name + "/checkpoint", Marker, queue_size=1, latch=True
         )
